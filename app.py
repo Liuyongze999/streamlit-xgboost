@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import random
 from sklearn.model_selection import train_test_split, KFold, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
 import xgboost as xgb
@@ -360,6 +359,40 @@ def show_results():
     st.pyplot(fig)
     plt.close(fig)
 
+    # ── 2D 彩色散点图 ──
+    st.header("🎨 2D 彩色散点图")
+    st.caption("选择两个特征作为 X/Y 轴，用第三维（目标值或预测值）着色")
+
+    pred_df = pd.concat([X_all, pd.DataFrame(y_pred_all, columns=['Te_pred'], index=X_all.index)], axis=1)
+    if target_col not in pred_df.columns:
+        pred_df[target_col] = y_all.values
+
+    cc1, cc2, cc3 = st.columns(3)
+    all_plot_cols = X_all.columns.tolist() + ['Te_pred', target_col]
+    with cc1:
+        x_col = st.selectbox("X 轴特征", X_all.columns.tolist(), key='x_col')
+    with cc2:
+        y_col = st.selectbox("Y 轴特征", [c for c in X_all.columns.tolist() if c != x_col], key='y_col')
+    with cc3:
+        color_col = st.selectbox("颜色映射", all_plot_cols + ['Te_pred'],
+                                 index=len(all_plot_cols) - 1 if 'Te_pred' in all_plot_cols else 0, key='color_col')
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    fig.dpi = 150
+    xv = pred_df[x_col].values
+    yv = pred_df[y_col].values
+    cv = pred_df[color_col].values
+
+    cmap = plt.get_cmap('jet')
+    norm = plt.Normalize(vmin=cv.min(), vmax=cv.max())
+    sc = ax.scatter(xv, yv, s=30, c=cv, cmap=cmap, norm=norm, marker='o', alpha=0.7)
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label(color_col, size=12)
+    ax.set_xlabel(x_col, size=14)
+    ax.set_ylabel(y_col, size=14)
+    st.pyplot(fig)
+    plt.close(fig)
+
     # ── 预测 vs 真实 ──
     st.header("📊 预测 vs 真实")
     tab_test, tab_all = st.tabs(["测试集", "全部数据"])
@@ -385,64 +418,6 @@ def show_results():
             plt.colorbar(sc, ax=ax)
             st.pyplot(fig)
             plt.close(fig)
-
-    # ── 特征重要性 ──
-    st.header("🔍 特征重要性")
-    imp_types = ['gain', 'total_gain', 'cover', 'total_cover']
-    imp_labels = {
-        'gain': 'Gain (平均增益)',
-        'total_gain': 'Total Gain (总增益)',
-        'cover': 'Cover (平均覆盖)',
-        'total_cover': 'Total Cover (总覆盖)'
-    }
-    selected_imp = st.selectbox("重要性类型", imp_types, format_func=lambda x: imp_labels[x])
-
-    model.importance_type = selected_imp
-    imp_dict = dict(zip(X_all.columns, model.feature_importances_))
-    imp_sorted = sorted(imp_dict.items(), key=lambda kv: kv[1], reverse=True)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.dpi = 120
-    names, values = zip(*imp_sorted)
-    colors = plt.cm.viridis(np.linspace(0.2, 0.9, len(names)))
-    ax.barh(range(len(names)), values, color=colors)
-    ax.set_yticks(range(len(names)))
-    ax.set_yticklabels(names)
-    ax.invert_yaxis()
-    ax.set_xlabel(imp_labels[selected_imp])
-    st.pyplot(fig)
-    plt.close(fig)
-
-    # ── 排列重要性 ──
-    st.header("🔀 排列重要性 (Permutation Importance)")
-    st.caption("逐列打乱特征值后观察 MAE 变化，MAE 升幅越大说明该特征越重要")
-
-    X_test_arr = np.array(X_test)
-    base_mae = mean_absolute_error(y_test, y_pred)
-    perm_results = {'bse': base_mae}
-
-    with st.spinner("正在计算排列重要性..."):
-        for idx, col_name in enumerate(X_all.columns):
-            saved = X_test_arr[:, idx].copy()
-            random.shuffle(X_test_arr[:, idx])
-            oof_mae = mean_absolute_error(y_test, model.predict(X_test_arr))
-            X_test_arr[:, idx] = saved
-            perm_results[col_name] = oof_mae
-
-    perm_sorted = sorted(perm_results.items(), key=lambda kv: kv[1], reverse=True)
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.dpi = 120
-    pnames, pvals = zip(*perm_sorted)
-    pcolors = ['#d62728' if n == 'bse' else '#1f77b4' for n in pnames]
-    ax.barh(range(len(pnames)), pvals, color=pcolors)
-    ax.set_yticks(range(len(pnames)))
-    ax.set_yticklabels(pnames)
-    ax.invert_yaxis()
-    ax.set_xlabel("MAE (越大越重要)")
-    ax.axvline(x=base_mae, color='red', ls='--', lw=1, label=f'Baseline MAE={base_mae:.4f}')
-    ax.legend()
-    st.pyplot(fig)
-    plt.close(fig)
 
     # ── SHAP 分析 ──
     st.header("🧠 SHAP 模型解释")
@@ -563,7 +538,6 @@ def show_results():
         # ── 全样本堆积力图 (notebook cell 44) ──
         st.subheader("SHAP 全样本堆积力图 (Stacked Force Plot)")
         st.caption("所有样本的 SHAP 解释叠加视图，可观察整体预测趋势")
-        # initjs 在 Streamlit 的隔离 iframe 中无效，需用 components.html 内联 JS
         shap_html = f"<head>{shap.getjs()}</head><body>{shap.plots.force(explainer.expected_value, shap_values.values, X_shap).html()}</body>"
         st.components.v1.html(shap_html, height=400, scrolling=True)
 
@@ -575,7 +549,6 @@ def show_results():
 
         for sample_id in gal_indices:
             st.caption(f"样本 #{sample_id}")
-            # 将特征值四舍五入到 2 位小数，避免数字太长挤占图形空间
             rounded_features = X_shap.iloc[sample_id].round(2)
             plt.rcParams.update({'font.size': 5})
             shap.plots.force(shap_values[sample_id], matplotlib=True, show=False,
@@ -584,40 +557,6 @@ def show_results():
             st.pyplot(plt.gcf())
             plt.close('all')
             plt.rcParams.update({'font.size': 14})
-
-    # ── 2D 彩色散点图 ──
-    st.header("🎨 2D 彩色散点图")
-    st.caption("选择两个特征作为 X/Y 轴，用第三维（目标值或预测值）着色")
-
-    pred_df = pd.concat([X_all, pd.DataFrame(y_pred_all, columns=['Te_pred'], index=X_all.index)], axis=1)
-    if target_col not in pred_df.columns:
-        pred_df[target_col] = y_all.values
-
-    cc1, cc2, cc3 = st.columns(3)
-    all_plot_cols = X_all.columns.tolist() + ['Te_pred', target_col]
-    with cc1:
-        x_col = st.selectbox("X 轴特征", X_all.columns.tolist(), key='x_col')
-    with cc2:
-        y_col = st.selectbox("Y 轴特征", [c for c in X_all.columns.tolist() if c != x_col], key='y_col')
-    with cc3:
-        color_col = st.selectbox("颜色映射", all_plot_cols + ['Te_pred'],
-                                 index=len(all_plot_cols) - 1 if 'Te_pred' in all_plot_cols else 0, key='color_col')
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    fig.dpi = 150
-    xv = pred_df[x_col].values
-    yv = pred_df[y_col].values
-    cv = pred_df[color_col].values
-
-    cmap = plt.get_cmap('jet')
-    norm = plt.Normalize(vmin=cv.min(), vmax=cv.max())
-    sc = ax.scatter(xv, yv, s=30, c=cv, cmap=cmap, norm=norm, marker='o', alpha=0.7)
-    cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label(color_col, size=12)
-    ax.set_xlabel(x_col, size=14)
-    ax.set_ylabel(y_col, size=14)
-    st.pyplot(fig)
-    plt.close(fig)
 
 
 def show_model_export():
@@ -634,11 +573,10 @@ def show_model_export():
         )
 
 
-# ── 触发训练 ──
 if train_clicked:
     run_training()
 
-# ── 展示结果 ──
+
 if st.session_state.trained and st.session_state.model is not None:
     show_results()
     show_model_export()
