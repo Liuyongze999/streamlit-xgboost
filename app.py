@@ -140,21 +140,44 @@ with st.sidebar:
                 cv_folds = st.selectbox("交叉验证折数", [3, 5, 10], index=1)
 
             with st.expander("搜索范围设置", expanded=False):
-                ca, cb = st.columns(2)
-                with ca:
+                c1, c2 = st.columns(2)
+                with c1:
                     lr_min = st.number_input("learning_rate 下限", 0.001, 0.1, 0.01, 0.005)
+                with c2:
                     lr_max = st.number_input("learning_rate 上限", 0.01, 0.5, 0.1, 0.01)
+
+                c1, c2 = st.columns(2)
+                with c1:
                     depth_min = st.number_input("max_depth 下限", 3, 10, 5, 1)
+                with c2:
                     depth_max = st.number_input("max_depth 上限", 5, 30, 20, 1)
+
+                c1, c2 = st.columns(2)
+                with c1:
                     n_min = st.number_input("n_estimators 下限", 50, 300, 80, 10)
+                with c2:
                     n_max = st.number_input("n_estimators 上限", 100, 1000, 300, 10)
-                with cb:
+
+                c1, c2 = st.columns(2)
+                with c1:
                     subsample_min = st.number_input("subsample 下限", 0.1, 1.0, 0.1, 0.05)
+
+                c1, c2 = st.columns(2)
+                with c1:
                     gamma_min = st.number_input("gamma 下限", 0.0, 5.0, 0.1, 0.05)
+                with c2:
                     gamma_max = st.number_input("gamma 上限", 0.1, 10.0, 1.0, 0.1)
+
+                c1, c2 = st.columns(2)
+                with c1:
                     alpha_min = st.number_input("reg_alpha 下限", 0.0, 5.0, 0.1, 0.05)
+                with c2:
                     alpha_max = st.number_input("reg_alpha 上限", 0.1, 10.0, 2.0, 0.1)
+
+                c1, c2 = st.columns(2)
+                with c1:
                     lambda_min = st.number_input("reg_lambda 下限", 0.0, 5.0, 0.1, 0.05)
+                with c2:
                     lambda_max = st.number_input("reg_lambda 上限", 0.1, 10.0, 2.0, 0.1)
 
         st.markdown("---")
@@ -328,10 +351,10 @@ def show_results():
         st.metric("ALL RMSE", f"{rmse_all:.4f}")
     with c4:
         st.metric("ALL MAPE", f"{mape_all:.4f}")
-    with c5:
-        bp = st.session_state.best_params
-        st.metric("最优参数",
-                  f"n={bp.get('n_estimators','?')} d={bp.get('max_depth','?')} lr={bp.get('learning_rate','?'):.4f}")
+
+    bp = st.session_state.best_params
+    st.metric("最优参数",
+              f"n_estimators={bp.get('n_estimators','?')}  max_depth={bp.get('max_depth','?')}  learning_rate={bp.get('learning_rate','?'):.4f}  subsample={bp.get('subsample','?'):.2f}")
 
     # ── 误差统计 ──
     with st.expander("📏 预测误差统计", expanded=False):
